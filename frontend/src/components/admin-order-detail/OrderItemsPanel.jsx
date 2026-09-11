@@ -18,11 +18,12 @@ export default function OrderItemsPanel({ selectedOrder }) {
                 {item.name}
               </p>
               <p className="text-xs text-stone-500">
-                Qty: {item.quantity} · {formatCurrency(item.price)} each
+                {item.configurationSummary?.join(" · ") ||
+                  `Qty: ${item.quantity} · ${formatCurrency(item.price)} each`}
               </p>
             </div>
             <span className="text-sm font-semibold text-stone-900 flex-shrink-0">
-              {formatCurrency(item.price * item.quantity)}
+              {formatCurrency(item.totalPrice ?? item.price * item.quantity)}
             </span>
           </div>
         ))}

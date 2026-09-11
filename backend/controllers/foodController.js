@@ -1,14 +1,163 @@
 import Food from "../models/foodModel.js";
 import cloudinary, { configureCloudinary } from "../config/cloudinary.js";
 
+const FOOD_TYPES = ["RICE", "SWALLOW", "BEANS", "YAM", "SIDE", "SNACK", "DRINK", "SIMPLE"];
+const FOOD_ROLES = ["main", "side", "protein", "standalone"];
+const CATEGORY_BY_TYPE = {
+    RICE: "Rice & Meals",
+    SWALLOW: "Swallows",
+    BEANS: "Beans",
+    YAM: "Yam & Pottage",
+    SIDE: "Sides",
+    SNACK: "Snacks",
+    DRINK: "Drinks",
+    SIMPLE: "Snacks",
+};
+
+const deriveFoodRole = (foodType, explicitRole) => {
+    const normalizedRole = String(explicitRole || "").trim().toLowerCase();
+    if (FOOD_ROLES.includes(normalizedRole)) return normalizedRole;
+
+    const type = String(foodType || "SIMPLE").toUpperCase();
+    if (["RICE", "SWALLOW", "BEANS", "YAM"].includes(type)) return "main";
+    if (["SNACK", "DRINK"].includes(type)) return "standalone";
+    return "side";
+};
+
+const parseBoolean = (value, fallback = true) => {
+    if (value === undefined || value === null || value === "") return fallback;
+    return value === true || value === "true";
+};
+
+const normalizeOptions = (options) => {
+    if (!Array.isArray(options)) return [];
+    return options
+        .map((option) => {
+            const imageUrl = String(option?.image || option?.imageUrl || option?.img || "").trim();
+            return {
+                ...option,
+                name: String(option?.name || "").trim(),
+                price: Number(option?.price || 0),
+                image: imageUrl,
+                imageUrl,
+                img: imageUrl,
+                available: parseBoolean(option?.available, true),
+            };
+        })
+        .filter((option) => option.name && !Number.isNaN(option.price) && option.price >= 0);
+};
+
+const parseConfiguration = (body) => {
+    const raw = typeof body.configuration === "string"
+        ? JSON.parse(body.configuration || "{}")
+        : body.configuration || {};
+
+    return {
+        portionLabel: String(raw.portionLabel || body.portionLabel || "portion").trim(),
+        minQuantity: Number(raw.minQuantity || body.minQuantity || 1),
+        maxQuantity: Number(raw.maxQuantity || body.maxQuantity || 20),
+        defaultQuantity: Number(raw.defaultQuantity || body.defaultQuantity || 1),
+        allowMultipleMainBases: parseBoolean(raw.allowMultipleMainBases ?? body.allowMultipleMainBases, false),
+        minMainBases: Number(raw.minMainBases || body.minMainBases || 1),
+        maxMainBases: Number(raw.maxMainBases || body.maxMainBases || 1),
+        proteins: normalizeOptions(raw.proteins),
+        riceBases: normalizeOptions(raw.riceBases),
+        swallowBases: normalizeOptions(raw.swallowBases),
+        sides: normalizeOptions(raw.sides),
+        soups: normalizeOptions(raw.soups),
+        extras: normalizeOptions(raw.extras),
+        variants: normalizeOptions(raw.variants),
+    };
+};
+
+const getFoodPayload = (body) => {
+    const foodType = String(body.foodType || body.type || "SIMPLE").toUpperCase();
+    if (!FOOD_TYPES.includes(foodType))
+    {
+        throw new Error("Invalid food type");
+    }
+
+    const role = deriveFoodRole(foodType, body.role);
+
+    return {
+        foodType,
+        role,
+        allowStandalone: parseBoolean(body.allowStandalone, role === "standalone"),
+        published: parseBoolean(body.published, true),
+        configuration: parseConfiguration(body),
+    };
+};
+
+const normalizeLegacyFoodRecord = (food) => {
+    if (!food) return food;
+
+    const plainFood = food.toObject ? food.toObject() : { ...food };
+    const normalizedType = String(plainFood.foodType || plainFood.type || "SIMPLE").toUpperCase();
+    const safeType = FOOD_TYPES.includes(normalizedType) ? normalizedType : "SIMPLE";
+    const normalizedConfiguration = plainFood.configuration && typeof plainFood.configuration === "object"
+        ? plainFood.configuration
+        : {};
+
+    const role = deriveFoodRole(safeType, plainFood.role);
+
+    const normalizeOptionList = (list = []) =>
+        Array.isArray(list)
+            ? list.map((option) => {
+                const imageUrl = String(option?.image || option?.imageUrl || option?.img || "").trim();
+                return {
+                    ...option,
+                    image: imageUrl,
+                    imageUrl,
+                    img: imageUrl,
+                };
+            })
+            : [];
+
+    return {
+        ...plainFood,
+        foodType: safeType,
+        role,
+        allowStandalone: plainFood.allowStandalone === true || role === "standalone",
+        category: plainFood.category || CATEGORY_BY_TYPE[safeType] || "Snacks",
+        published: plainFood.published !== false,
+        available: plainFood.available !== false,
+        price: Number(plainFood.price || 0),
+        configuration: {
+            portionLabel: normalizedConfiguration.portionLabel || (safeType === "SWALLOW" ? "wrap" : "portion"),
+            minQuantity: Number(normalizedConfiguration.minQuantity || 1),
+            maxQuantity: Number(normalizedConfiguration.maxQuantity || 20),
+            defaultQuantity: Number(normalizedConfiguration.defaultQuantity || 1),
+            allowMultipleMainBases: normalizedConfiguration.allowMultipleMainBases === true,
+            minMainBases: Number(normalizedConfiguration.minMainBases || 1),
+            maxMainBases: Number(normalizedConfiguration.maxMainBases || 1),
+            proteins: normalizeOptionList(normalizedConfiguration.proteins),
+            riceBases: normalizeOptionList(normalizedConfiguration.riceBases),
+            swallowBases: normalizeOptionList(normalizedConfiguration.swallowBases),
+            sides: normalizeOptionList(normalizedConfiguration.sides),
+            soups: normalizeOptionList(normalizedConfiguration.soups),
+            extras: normalizeOptionList(normalizedConfiguration.extras),
+            variants: normalizeOptionList(normalizedConfiguration.variants),
+        },
+    };
+};
+
+const uploadImageIfNeeded = async (req, image) => {
+    if (!req.file || image) return image;
+
+    const base64String = `data:${req.file.mimetype};base64,${req.file.buffer.toString("base64")}`;
+    configureCloudinary();
+    const result = await cloudinary.uploader.upload(base64String, { folder: "food_app" });
+    return result.secure_url;
+};
+
 // @desc    Get all food items
 // @route   GET /api/foods
-// @access  Public  
+// @access  Public
 const getFoods = async (req, res) => {
     try
     {
         const foods = await Food.find();
-        res.json(foods);
+        res.json(foods.map(normalizeLegacyFoodRecord));
     } catch (error)
     {
         res.status(500).json({ message: error.message });
@@ -26,36 +175,34 @@ const getFoodById = async (req, res) => {
         {
             return res.status(404).json({ message: "Food item not found" });
         }
-        res.json(food);
+        res.json(normalizeLegacyFoodRecord(food));
     } catch (error)
     {
         res.status(500).json({ message: error.message });
     }
 };
 
-
 // @desc    Create a new food item
-// @route   POST /api/foods/create
+// @route   POST /api/foods
 // @access  Private (Admin)
 const createFood = async (req, res) => {
-    const name = req.body.name?.trim();
-    const description = req.body.description?.trim();
-    const category = req.body.category?.trim();
-    const { price, available } = req.body;
-    const popular = req.body.popular === "true" || req.body.popular === true;
-    let image = req.body.image?.trim();
-    const isFastFood = category === "Fast Food";
-    const preparationTime = isFastFood ? Number(req.body.preparationTime) : 0;
     try
     {
-        const missingFields = [];
+        const name = req.body.name?.trim();
+        const description = req.body.description?.trim();
+        const category = req.body.category?.trim();
+        const { price, available } = req.body;
+        const popular = parseBoolean(req.body.popular, false);
+        const preparationTime = Number(req.body.preparationTime || 0);
+        let image = req.body.image?.trim();
+        const domainPayload = getFoodPayload(req.body);
 
+        const missingFields = [];
         if (!name) missingFields.push("name");
         if (!description) missingFields.push("description");
         if (price === undefined || price === null || price === "") missingFields.push("price");
         if (!image && !req.file) missingFields.push("image");
         if (!category) missingFields.push("category");
-        if (isFastFood && !req.body.preparationTime) missingFields.push("preparationTime");
 
         if (missingFields.length > 0)
         {
@@ -65,34 +212,25 @@ const createFood = async (req, res) => {
         }
 
         const numericPrice = Number(price);
-
         if (Number.isNaN(numericPrice) || numericPrice < 0)
         {
             return res.status(400).json({ message: "Price must be a valid number" });
         }
 
-        if (isFastFood && (Number.isNaN(preparationTime) || preparationTime <= 0))
+        if (Number.isNaN(preparationTime) || preparationTime < 0)
         {
             return res.status(400).json({ message: "Preparation time must be a valid number" });
         }
 
-        // If file uploaded, upload to cloudinary
-        if (req.file && !image)
+        try
         {
-            const base64String = `data:${req.file.mimetype};base64,${req.file.buffer.toString("base64")}`;
-            try
-            {
-                configureCloudinary();
-                const result = await cloudinary.uploader.upload(base64String, { folder: "food_app" });
-                image = result.secure_url;
-            } catch (err)
-            {
-                console.error("Cloudinary upload failed", err);
-                return res.status(500).json({ message: "Image upload failed" });
-            }
+            image = await uploadImageIfNeeded(req, image);
+        } catch (err)
+        {
+            console.error("Cloudinary upload failed", err);
+            return res.status(500).json({ message: "Image upload failed" });
         }
 
-        // parse ingredients if provided
         const ingredients = Array.isArray(req.body.ingredients)
             ? req.body.ingredients.map((s) => String(s).trim()).filter(Boolean)
             : typeof req.body.ingredients === "string"
@@ -104,17 +242,18 @@ const createFood = async (req, res) => {
             description,
             price: numericPrice,
             image,
-            category: category || undefined,
+            category: category || CATEGORY_BY_TYPE[domainPayload.foodType] || "Snacks",
             preparationTime,
-            available: available !== undefined ? available : true,
+            available: parseBoolean(available, true),
             additionalInfo: req.body.additionalInfo?.trim() || "",
             ingredients,
-            popular: Boolean(popular),
+            popular,
+            ...domainPayload,
         });
-        res.status(201).json(createdFood);
+        res.status(201).json(normalizeLegacyFoodRecord(createdFood));
     } catch (error)
     {
-        res.status(500).json({ message: error.message });
+        res.status(400).json({ message: error.message });
     }
 };
 
@@ -124,15 +263,6 @@ const createFood = async (req, res) => {
 const updateFood = async (req, res) => {
     try
     {
-        const name = req.body.name?.trim();
-        const description = req.body.description?.trim();
-        let image = req.body.image?.trim();
-        const category = req.body.category?.trim();
-        const preparationTime = req.body.preparationTime;
-        const additionalInfo = req.body.additionalInfo?.trim();
-        const { price, available } = req.body;
-        const popular = req.body.popular === "true" || req.body.popular === true;
-
         const food = await Food.findById(req.params.id);
 
         if (!food)
@@ -140,13 +270,9 @@ const updateFood = async (req, res) => {
             return res.status(404).json({ message: "Food item not found" });
         }
 
-        const oldCategory = food.category;
-        const newCategory = category || oldCategory;
-        const isFastFood = newCategory === "Fast Food";
-
-        if (price !== undefined)
+        if (req.body.price !== undefined)
         {
-            const numericPrice = Number(price);
+            const numericPrice = Number(req.body.price);
             if (Number.isNaN(numericPrice) || numericPrice < 0)
             {
                 return res.status(400).json({ message: "Price must be a valid number" });
@@ -154,73 +280,57 @@ const updateFood = async (req, res) => {
             food.price = numericPrice;
         }
 
-        if (preparationTime !== undefined)
+        if (req.body.preparationTime !== undefined)
         {
-            if (isFastFood)
+            const numericPreparationTime = Number(req.body.preparationTime);
+            if (Number.isNaN(numericPreparationTime) || numericPreparationTime < 0)
             {
-                const numericPreparationTime = Number(preparationTime);
-                if (Number.isNaN(numericPreparationTime) || numericPreparationTime <= 0)
-                {
-                    return res.status(400).json({ message: "Preparation time must be a valid number" });
-                }
-                food.preparationTime = numericPreparationTime;
+                return res.status(400).json({ message: "Preparation time must be a valid number" });
             }
+            food.preparationTime = numericPreparationTime;
         }
 
-        if (newCategory !== "Fast Food")
+        let image = req.body.image?.trim();
+        try
         {
-            food.preparationTime = 0;
-        }
-
-        if (
-            newCategory === "Fast Food" &&
-            oldCategory !== "Fast Food" &&
-            preparationTime === undefined &&
-            !food.preparationTime
-        )
+            image = await uploadImageIfNeeded(req, image);
+        } catch (err)
         {
-            return res.status(400).json({
-                message: "Preparation time is required for Fast Food items",
-            });
+            console.error("Cloudinary upload failed", err);
+            return res.status(500).json({ message: "Image upload failed" });
         }
 
-        food.name = name || food.name;
-        food.description = description || food.description;
-        // If a new file is uploaded, replace image via cloudinary
-        if (req.file && !image)
-        {
-            const base64String = `data:${req.file.mimetype};base64,${req.file.buffer.toString("base64")}`;
-            try
-            {
-                configureCloudinary();
-                const result = await cloudinary.uploader.upload(base64String, { folder: "food_app" });
-                image = result.secure_url;
-            } catch (err)
-            {
-                console.error("Cloudinary upload failed", err);
-                return res.status(500).json({ message: "Image upload failed" });
-            }
-        }
-
-        food.image = image || food.image;
-        if (popular !== undefined) food.popular = Boolean(popular);
-        // parse and set ingredients if provided
         const ingredients = Array.isArray(req.body.ingredients)
             ? req.body.ingredients.map((s) => String(s).trim()).filter(Boolean)
             : typeof req.body.ingredients === "string"
                 ? req.body.ingredients.split(",").map((s) => s.trim()).filter(Boolean)
                 : undefined;
+
+        if (req.body.name?.trim()) food.name = req.body.name.trim();
+        if (req.body.description?.trim()) food.description = req.body.description.trim();
+        if (req.body.category?.trim()) food.category = req.body.category.trim();
+        if (image) food.image = image;
         if (ingredients !== undefined) food.ingredients = ingredients;
-        food.category = newCategory;
-        if (available !== undefined) food.available = available;
-        food.additionalInfo = additionalInfo || food.additionalInfo;
+        if (req.body.additionalInfo !== undefined) food.additionalInfo = req.body.additionalInfo?.trim() || "";
+        if (req.body.available !== undefined) food.available = parseBoolean(req.body.available, true);
+        if (req.body.popular !== undefined) food.popular = parseBoolean(req.body.popular, false);
+        if (req.body.published !== undefined) food.published = parseBoolean(req.body.published, true);
+
+        if (req.body.foodType !== undefined || req.body.configuration !== undefined || req.body.role !== undefined || req.body.allowStandalone !== undefined)
+        {
+            const domainPayload = getFoodPayload(req.body);
+            food.foodType = domainPayload.foodType;
+            food.role = domainPayload.role;
+            food.allowStandalone = domainPayload.allowStandalone;
+            food.configuration = domainPayload.configuration;
+            food.published = domainPayload.published;
+        }
+
         await food.save();
-
-        res.status(200).json(food);
-
+        res.status(200).json(normalizeLegacyFoodRecord(food));
     } catch (error)
     {
-        res.status(500).json({ message: error.message });
+        res.status(400).json({ message: error.message });
     }
 };
 
@@ -241,6 +351,5 @@ const deleteFood = async (req, res) => {
         res.status(500).json({ message: error.message });
     }
 };
-
 
 export { getFoods, getFoodById, createFood, updateFood, deleteFood };

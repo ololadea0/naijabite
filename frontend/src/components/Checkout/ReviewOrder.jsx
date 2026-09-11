@@ -1,5 +1,6 @@
 import React from "react";
 import { formatCurrency } from "../../lib/formatters";
+import { summarizeConfiguration } from "../../lib/mealConfig";
 
 export default function ReviewOrder({
   cart,
@@ -18,12 +19,13 @@ export default function ReviewOrder({
 
       <div className="mb-4 p-3 rounded-lg bg-amber-50 border border-amber-100 text-sm text-amber-800">
         <strong>Note:</strong> Paid orders cannot be cancelled or refunded.
-        Please confirm your details before placing the order.
+        Please confirm your plates before placing the order.
       </div>
 
       <div className="space-y-3 mb-5">
-        {cart.map(({ food, quantity }, idx) => {
+        {cart.map(({ food, quantity, configuration, totalPrice }, idx) => {
           const imageSrc = food?.imageUrl || food?.image || null;
+          const summary = summarizeConfiguration(configuration, food);
 
           return (
             <div
@@ -43,10 +45,12 @@ export default function ReviewOrder({
                 <p className="text-sm font-medium text-stone-900 truncate">
                   {food.name}
                 </p>
-                <p className="text-xs text-stone-500">Qty: {quantity}</p>
+                <p className="text-xs text-stone-500 truncate">
+                  {summary.join(" · ") || `Qty: ${quantity}`}
+                </p>
               </div>
               <span className="text-sm font-semibold text-stone-900 flex-shrink-0">
-                {formatCurrency(food.price * quantity)}
+                {formatCurrency(totalPrice ?? food.price * quantity)}
               </span>
             </div>
           );

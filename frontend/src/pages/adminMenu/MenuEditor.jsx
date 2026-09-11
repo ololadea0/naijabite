@@ -2,6 +2,7 @@ import {
   ImageField,
   NameCategoryFields,
   DescriptionPriceFields,
+  ConfigurationFields,
   IngredientsField,
 } from "./MenuFormFields";
 import { MenuSectionHeader } from "./MenuSectionHeader";
@@ -42,6 +43,15 @@ export function MenuForm({
             setForm={setForm}
             formErrors={formErrors}
           />
+          {form.role === "main" && (
+            <ConfigurationFields form={form} setForm={setForm} />
+          )}
+          {form.role !== "main" && (
+            <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+              This item is marked as a {form.role || "side"}. It can only be
+              used as a plate complement unless you allow standalone ordering.
+            </div>
+          )}
           <IngredientsField
             form={form}
             setForm={setForm}

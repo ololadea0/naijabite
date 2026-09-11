@@ -4,6 +4,7 @@ import { fetchFoods } from "../store/foodSlice";
 import Navbar from "../components/Navbar";
 import FoodCard from "../components/FoodCard";
 import Footer from "../components/Footer";
+import { getCustomerVisibleMenuItems } from "../lib/mealConfig";
 
 const SORT_OPTIONS = ["Popular", "Price: Low", "Price: High"];
 
@@ -15,7 +16,7 @@ export default function MenuPage({ navigate }) {
   const [sort, setSort] = useState("Popular");
 
   useEffect(() => {
-    if (!foods || foods.length === 0) dispatch(fetchFoods());
+    dispatch(fetchFoods());
   }, [dispatch]);
 
   const categories = [
@@ -25,10 +26,14 @@ export default function MenuPage({ navigate }) {
 
   const filtered = useMemo(() => {
     let items = (foods || []).filter((f) => {
+      if (f.published === false) return false;
       const matchSearch =
         !search ||
         (f.name || "").toLowerCase().includes(search.toLowerCase()) ||
-        (f.description || "").toLowerCase().includes(search.toLowerCase());
+        (f.description || "").toLowerCase().includes(search.toLowerCase()) ||
+        JSON.stringify(f.configuration || {})
+          .toLowerCase()
+          .includes(search.toLowerCase());
       const matchCat = category === "All" || f.category === category;
       return matchSearch && matchCat;
     });
@@ -138,14 +143,42 @@ export default function MenuPage({ navigate }) {
         </p>
 
         {filtered.length > 0 ? (
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
-            {filtered.map((food) => (
-              <FoodCard
-                key={food._id || food.id}
-                food={food}
-                navigate={navigate}
-              />
-            ))}
+          <div className="space-y-10">
+            {categories
+              .filter((cat) => cat !== "All")
+              .map((cat) => {
+                const sectionFoods = filtered.filter(
+                  (food) => food.category === cat,
+                );
+                if (!sectionFoods.length) return null;
+
+                return (
+                  <section key={cat}>
+                    <div className="flex items-end justify-between gap-4 mb-4">
+                      <div>
+                        <h2
+                          className="text-2xl font-semibold text-stone-900"
+                          style={{ fontFamily: "var(--font-display)" }}
+                        >
+                          {cat}
+                        </h2>
+                        <p className="text-xs text-stone-500 mt-1">
+                          Build your plate from today's kitchen options.
+                        </p>
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-1 xs:grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+                      {getCustomerVisibleMenuItems(sectionFoods).map((food) => (
+                        <FoodCard
+                          key={food._id || food.id}
+                          food={food}
+                          navigate={navigate}
+                        />
+                      ))}
+                    </div>
+                  </section>
+                );
+              })}
           </div>
         ) : (
           <div className="text-center py-20">

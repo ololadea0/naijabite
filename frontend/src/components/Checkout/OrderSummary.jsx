@@ -1,5 +1,6 @@
 import React from "react";
 import { formatCurrency } from "../../lib/formatters";
+import { summarizeConfiguration } from "../../lib/mealConfig";
 
 const OrderSummary = ({ cart, cartSubtotal, deliveryFee, total }) => {
   return (
@@ -8,16 +9,20 @@ const OrderSummary = ({ cart, cartSubtotal, deliveryFee, total }) => {
         Order summary
       </h3>
       <div className="space-y-2.5 text-sm">
-        {cart.map(({ food, quantity }, idx) => (
+        {cart.map(({ food, quantity, configuration, totalPrice }, idx) => (
           <div
-            key={food?.id ?? `item-${idx}`}
-            className="flex justify-between text-stone-600"
+            key={food?.id ?? food?._id ?? `item-${idx}`}
+            className="flex justify-between gap-3 text-stone-600"
           >
-            <span className="truncate mr-2">
-              {food?.name ?? "Menu item"} ×{quantity}
+            <span className="min-w-0">
+              <span className="block truncate">{food?.name ?? "Menu item"}</span>
+              <span className="block text-xs text-stone-400 truncate">
+                {summarizeConfiguration(configuration, food).join(" · ") ||
+                  `Qty x ${quantity}`}
+              </span>
             </span>
-            <span className="font-medium text-stone-900">
-              {formatCurrency((food?.price ?? 0) * quantity)}
+            <span className="font-medium text-stone-900 flex-shrink-0">
+              {formatCurrency(totalPrice ?? (food?.price ?? 0) * quantity)}
             </span>
           </div>
         ))}

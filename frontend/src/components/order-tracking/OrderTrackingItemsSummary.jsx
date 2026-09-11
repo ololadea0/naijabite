@@ -9,10 +9,7 @@ export default function OrderTrackingItemsSummary({ order }) {
       </h2>
       <div className="space-y-3">
         {order.items.map((item, index) => (
-          <div
-            key={`${item.name}-${index}`}
-            className="flex items-center gap-3"
-          >
+          <div key={`${item.name}-${index}`} className="flex items-center gap-3">
             <img
               src={item.imageUrl}
               alt={item.name}
@@ -22,10 +19,12 @@ export default function OrderTrackingItemsSummary({ order }) {
               <p className="text-sm font-medium text-stone-900 truncate">
                 {item.name}
               </p>
-              <p className="text-xs text-stone-500">Qty: {item.quantity}</p>
+              <p className="text-xs text-stone-500 truncate">
+                {item.configurationSummary?.join(" · ") || `Qty: ${item.quantity}`}
+              </p>
             </div>
             <span className="text-sm font-semibold text-stone-900 flex-shrink-0">
-              {formatCurrency(item.price * item.quantity)}
+              {formatCurrency(item.totalPrice ?? item.price * item.quantity)}
             </span>
           </div>
         ))}

@@ -87,7 +87,7 @@ export function MenuTable({ foods, search, openEdit, onDelete }) {
         <table className="w-full text-sm">
           <thead>
             <tr className="bg-stone-50">
-              {"Item,Category,Price,Status,Actions"
+              {"Item,Category,Type,Price,Status,Actions"
                 .split(",")
                 .map((heading) => (
                   <th
@@ -123,18 +123,21 @@ export function MenuTable({ foods, search, openEdit, onDelete }) {
                 <td className="px-4 py-3.5 text-stone-600 whitespace-nowrap">
                   {food.category}
                 </td>
+                <td className="px-4 py-3.5 text-stone-600 whitespace-nowrap">
+                  {food.foodType || "SIMPLE"}
+                </td>
                 <td className="px-4 py-3.5 font-semibold text-stone-900 whitespace-nowrap">
                   {formatCurrency(food.price)}
                 </td>
                 <td className="px-4 py-3.5">
                   <span
                     className={`text-xs font-medium px-2 py-0.5 rounded-full border ${
-                      food.available
+                      food.available && food.published !== false
                         ? "bg-green-50 text-green-700 border-green-200"
                         : "bg-red-50 text-red-600 border-red-200"
                     }`}
                   >
-                    {food.available ? "Available" : "Unavailable"}
+                    {food.available && food.published !== false ? "Live" : "Hidden"}
                   </span>
                 </td>
                 <td className="px-4 py-3.5">

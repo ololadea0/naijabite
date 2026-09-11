@@ -1,4 +1,5 @@
 import { formatDeliveryAddress, getFoodImage } from "../lib/formatters";
+import { summarizeConfiguration } from "../lib/mealConfig";
 
 export const normalizeStatus = (status) => {
     const value = (status || "pending").toString().trim();
@@ -83,17 +84,26 @@ export const normalizeOrder = (order = {}) => {
         items: orderItems.map((item) => {
             const food = item.food || {};
             const foodId = food._id || food.id || item.foodId || item.id;
-            const hasFoodImage = Boolean(food.image || food.imageUrl);
+            const snapshotImage = item.imageSnapshot;
+            const hasFoodImage = Boolean(food.image || food.imageUrl || snapshotImage);
+            const name = item.nameSnapshot || food.name || item.name || "Menu item";
+            const quantity = item.qty ?? item.quantity ?? 1;
+            const unitPrice = Number(item.unitPrice ?? item.price ?? food.price ?? 0);
+            const totalPrice = Number(item.totalPrice ?? unitPrice * quantity);
+            const configuration = item.configuration || {};
 
             return {
                 ...item,
                 id: foodId,
-                name: food.name || item.name || "Menu item",
+                name,
                 imageUrl: hasFoodImage
-                    ? getFoodImage(food, "w=120&h=120")
+                    ? getFoodImage({ ...food, image: food.image || snapshotImage }, "w=120&h=120")
                     : item.imageUrl || null,
-                price: Number(item.price ?? food.price ?? item.totalPrice ?? 0),
-                quantity: item.qty ?? item.quantity ?? 1,
+                price: unitPrice,
+                totalPrice,
+                quantity,
+                configuration,
+                configurationSummary: summarizeConfiguration(configuration, food),
             };
         }),
     };

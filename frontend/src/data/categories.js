@@ -1,7 +1,10 @@
 export const CATEGORIES = [
     "All",
+    "Rice & Meals",
     "Swallows",
-    "Rice and Grain Dishes",
-    "Street Food and Snacks",
-    "Proteins",
+    "Beans",
+    "Yam & Pottage",
+    "Sides",
+    "Snacks",
+    "Drinks",
 ];

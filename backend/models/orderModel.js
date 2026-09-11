@@ -24,6 +24,26 @@ const orderSchema = mongoose.Schema({
                 type: Number,
                 required: true,
             },
+            unitPrice: {
+                type: Number,
+                default: 0,
+            },
+            totalPrice: {
+                type: Number,
+                default: 0,
+            },
+            configuration: {
+                type: mongoose.Schema.Types.Mixed,
+                default: {},
+            },
+            nameSnapshot: {
+                type: String,
+                default: "",
+            },
+            imageSnapshot: {
+                type: String,
+                default: "",
+            },
         },
     ],
     orderType: {

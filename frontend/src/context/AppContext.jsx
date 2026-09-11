@@ -20,11 +20,11 @@ import {
 } from "../store/orderSlice";
 import {
   normalizeOrder,
-  normalizeStatus,
   readCartFromStorage,
   persistCartToStorage,
   serializeStatus,
 } from "./appContextHelpers";
+import { calculateCartItemTotal, makeCartItemId } from "../lib/mealConfig";
 
 const AppContext = createContext(null);
 
@@ -34,7 +34,17 @@ export function AppProvider({ children }) {
   const foodStatus = useSelector((state) => state.food.status);
   const rawOrders = useSelector((state) => state.orders.items || []);
   const orders = useMemo(() => rawOrders.map(normalizeOrder), [rawOrders]);
-  const getCartItemId = useCallback((food) => food?._id || food?.id, []);
+
+  const getCartItemId = useCallback(
+    (itemOrFood) =>
+      itemOrFood?.cartItemId ||
+      makeCartItemId(
+        itemOrFood?.food || itemOrFood,
+        itemOrFood?.configuration || {},
+        itemOrFood?.quantity || 1,
+      ),
+    [],
+  );
 
   const [cart, setCart] = useState(() => readCartFromStorage());
 
@@ -45,7 +55,12 @@ export function AppProvider({ children }) {
 
   const cartCount = cart.reduce((s, i) => s + i.quantity, 0);
   const cartSubtotal = cart.reduce(
-    (s, i) => s + Number(i.food.price || 0) * i.quantity,
+    (s, i) =>
+      s +
+      Number(
+        i.totalPrice ??
+          calculateCartItemTotal(i.food, i.quantity, i.configuration || {}),
+      ),
     0,
   );
 
@@ -65,41 +80,103 @@ export function AppProvider({ children }) {
   }, [dispatch, user]);
 
   const addToCart = useCallback(
-    (food, qty = 1) => {
-      const itemId = getCartItemId(food);
+    (foodOrCartItem, qty = 1) => {
+      const nextItem = foodOrCartItem?.food
+        ? foodOrCartItem
+        : { food: foodOrCartItem, quantity: qty, configuration: {} };
+
+      const cartItem = {
+        ...nextItem,
+        quantity: nextItem.quantity || qty,
+        configuration: nextItem.configuration || {},
+      };
+      cartItem.totalPrice = calculateCartItemTotal(
+        cartItem.food,
+        cartItem.quantity,
+        cartItem.configuration,
+      );
+      cartItem.cartItemId = makeCartItemId(
+        cartItem.food,
+        cartItem.configuration,
+        cartItem.quantity,
+      );
+
+      const itemId = getCartItemId(cartItem);
       setCart((prev) => {
-        const existing = prev.find((i) => getCartItemId(i.food) === itemId);
+        const existing = prev.find((i) => getCartItemId(i) === itemId);
         if (existing) {
-          return prev.map((i) =>
-            getCartItemId(i.food) === itemId
-              ? { ...i, quantity: i.quantity + qty }
-              : i,
-          );
+          return prev.map((i) => {
+            if (getCartItemId(i) !== itemId) return i;
+            const quantity = i.quantity + cartItem.quantity;
+            return {
+              ...i,
+              quantity,
+              totalPrice: calculateCartItemTotal(
+                i.food,
+                quantity,
+                i.configuration || {},
+              ),
+            };
+          });
         }
-        return [...prev, { food, quantity: qty }];
+        return [...prev, cartItem];
       });
     },
     [getCartItemId],
   );
 
   const removeFromCart = useCallback(
-    (foodId) => {
-      setCart((prev) => prev.filter((i) => getCartItemId(i.food) !== foodId));
+    (cartItemId) => {
+      setCart((prev) => prev.filter((i) => getCartItemId(i) !== cartItemId));
     },
     [getCartItemId],
   );
 
   const updateCartQty = useCallback(
-    (foodId, qty) => {
+    (cartItemId, qty) => {
       if (qty <= 0) {
-        setCart((prev) => prev.filter((i) => getCartItemId(i.food) !== foodId));
-      } else {
-        setCart((prev) =>
-          prev.map((i) =>
-            getCartItemId(i.food) === foodId ? { ...i, quantity: qty } : i,
-          ),
-        );
+        setCart((prev) => prev.filter((i) => getCartItemId(i) !== cartItemId));
+        return;
       }
+
+      setCart((prev) =>
+        prev.map((i) =>
+          getCartItemId(i) === cartItemId
+            ? {
+                ...i,
+                quantity: qty,
+                totalPrice: calculateCartItemTotal(
+                  i.food,
+                  qty,
+                  i.configuration || {},
+                ),
+              }
+            : i,
+        ),
+      );
+    },
+    [getCartItemId],
+  );
+
+  const updateCartItem = useCallback(
+    (cartItemId, updates) => {
+      setCart((prev) =>
+        prev.map((item) => {
+          if (getCartItemId(item) !== cartItemId) return item;
+          const next = { ...item, ...updates };
+          next.totalPrice = calculateCartItemTotal(
+            next.food,
+            next.quantity,
+            next.configuration || {},
+          );
+          next.cartItemId = makeCartItemId(
+            next.food,
+            next.configuration || {},
+            next.quantity,
+          );
+          return next;
+        }),
+      );
     },
     [getCartItemId],
   );
@@ -131,9 +208,10 @@ export function AppProvider({ children }) {
 
       const payload = {
         orderType,
-        orderItems: cart.map(({ food, quantity }) => ({
+        orderItems: cart.map(({ food, quantity, configuration }) => ({
           food: food._id || food.id,
           qty: quantity,
+          configuration: configuration || {},
         })),
         deliveryAddress: orderType === "delivery" ? deliveryDetails : undefined,
       };
@@ -182,12 +260,14 @@ export function AppProvider({ children }) {
       addToCart,
       removeFromCart,
       updateCartQty,
+      updateCartItem,
       clearCart,
       toggleFavorite,
       placeOrder,
       updateOrderStatus,
       cancelOrder,
       confirmDelivery,
+      getCartItemId,
     },
     children: children,
   });

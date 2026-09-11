@@ -3,6 +3,7 @@ import Notification from "../models/notificationModel.js";
 import asyncHandler from "express-async-handler";
 import Food from "../models/foodModel.js";
 import Setting from "../models/settingModel.js";
+import { priceOrderItem } from "../services/orderPricingService.js";
 import {
     sanitizeString,
     isAllowedLagosCity,
@@ -84,15 +85,17 @@ const createOrder = asyncHandler(async (req, res) => {
             return res.status(400).json({ message: `Food item "${food.name}" is currently unavailable` });
         }
 
-        updatedOrderItems.push({
-            food: item.food,
-            qty: item.qty,
-            price: food.price
-        });
+        try
+        {
+            updatedOrderItems.push(priceOrderItem(food, item));
+        } catch (error)
+        {
+            return res.status(400).json({ message: error.message });
+        }
     }
 
     const itemsTotal = updatedOrderItems.reduce(
-        (acc, item) => acc + item.price * item.qty,
+        (acc, item) => acc + Number(item.totalPrice ?? item.price * item.qty),
         0
     );
 
@@ -111,11 +114,11 @@ const createOrder = asyncHandler(async (req, res) => {
     // return populated order so frontend can show food names/images immediately
     const populatedOrder = await Order.findById(createdOrder._id).populate(
         "orderItems.food",
-        "name price preparationTime image"
+        "name price preparationTime image foodType configuration category"
     );
     // also populate user phone/email for admin/frontend convenience
     const populatedWithUser = await Order.findById(populatedOrder._id)
-        .populate("orderItems.food", "name price preparationTime image")
+        .populate("orderItems.food", "name price preparationTime image foodType configuration category")
         .populate("user", "name email phone");
 
     try
@@ -141,7 +144,7 @@ const createOrder = asyncHandler(async (req, res) => {
 const getMyOrders = asyncHandler(async (req, res) => {
 
     const orders = await Order.find({ user: req.user._id, isDeleted: false })
-        .populate("orderItems.food", "name price preparationTime image")
+        .populate("orderItems.food", "name price preparationTime image foodType configuration category")
         .populate("comments.user", "name email")
         .populate("comments.replies.user", "name email")
         .sort({ createdAt: -1 });
@@ -158,7 +161,7 @@ const getOrderById = asyncHandler(async (req, res) => {
         _id: req.params.id,
         user: req.user._id,
         isDeleted: false
-    }).populate("orderItems.food", "name price preparationTime image");
+    }).populate("orderItems.food", "name price preparationTime image foodType configuration category");
 
     if (order)
     {
@@ -176,7 +179,7 @@ const getOrderById = asyncHandler(async (req, res) => {
 const getOrders = asyncHandler(async (req, res) => {
 
     const orders = await Order.find({ isDeleted: false })
-        .populate("orderItems.food", "name price preparationTime image")
+        .populate("orderItems.food", "name price preparationTime image foodType configuration category")
         .populate("user", "name email phone")
         .populate("comments.user", "name email")
         .populate("comments.replies.user", "name email")
@@ -216,7 +219,7 @@ const updateOrderStatus = asyncHandler(async (req, res) => {
 
     const saved = await order.save();
     const updatedOrder = await Order.findById(saved._id)
-        .populate("orderItems.food", "name price preparationTime image")
+        .populate("orderItems.food", "name price preparationTime image foodType configuration category")
         .populate("user", "name email phone");
 
     try
@@ -262,7 +265,7 @@ const confirmOrderDelivered = asyncHandler(async (req, res) => {
 
     const saved = await order.save();
     const updatedOrder = await Order.findById(saved._id)
-        .populate("orderItems.food", "name price preparationTime image")
+        .populate("orderItems.food", "name price preparationTime image foodType configuration category")
         .populate("user", "name email phone");
 
     try
@@ -330,7 +333,7 @@ const cancelOrder = asyncHandler(async (req, res) => {
     order.status = "cancelled";
     const saved = await order.save();
     const updatedOrder = await Order.findById(saved._id)
-        .populate("orderItems.food", "name price preparationTime image")
+        .populate("orderItems.food", "name price preparationTime image foodType configuration category")
         .populate("user", "name email phone");
     try
     {
@@ -370,7 +373,7 @@ const addOrderComment = asyncHandler(async (req, res) => {
     const saved = await order.save();
 
     const populated = await Order.findById(saved._id)
-        .populate("orderItems.food", "name price preparationTime image")
+        .populate("orderItems.food", "name price preparationTime image foodType configuration category")
         .populate("user", "name email phone")
         .populate("comments.user", "name email")
         .populate("comments.replies.user", "name email");
@@ -412,7 +415,7 @@ const addOrderCommentReply = asyncHandler(async (req, res) => {
 
     const saved = await order.save();
     const populated = await Order.findById(saved._id)
-        .populate("orderItems.food", "name price preparationTime image")
+        .populate("orderItems.food", "name price preparationTime image foodType configuration category")
         .populate("user", "name email phone")
         .populate("comments.user", "name email")
         .populate("comments.replies.user", "name email");
@@ -436,3 +439,4 @@ const addOrderCommentReply = asyncHandler(async (req, res) => {
 
 
 export { createOrder, getMyOrders, getOrderById, getOrders, updateOrderStatus, deleteOrder, cancelOrder, confirmOrderDelivered, addOrderComment, addOrderCommentReply };
+

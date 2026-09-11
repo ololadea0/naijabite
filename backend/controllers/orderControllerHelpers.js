@@ -54,6 +54,11 @@ export const validateOrderItems = (orderItems) => {
         {
             return `Invalid quantity for item. Must be between 1 and 100`;
         }
+
+        if (item.configuration !== undefined && typeof item.configuration !== "object")
+        {
+            return "Invalid meal configuration";
+        }
     }
 
     return null;

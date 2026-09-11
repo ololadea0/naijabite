@@ -48,6 +48,9 @@ export default function AdminMenu({ navigate, onLogout }) {
     setForm({
       name: food.name,
       category: food.category,
+      foodType: food.foodType || "SIMPLE",
+      role: food.role || "main",
+      allowStandalone: Boolean(food.allowStandalone),
       price: food.price,
       description: food.description,
       ingredients: [...(food.ingredients || [])],
@@ -55,6 +58,11 @@ export default function AdminMenu({ navigate, onLogout }) {
       imageFile: null,
       available: food.available,
       popular: food.popular,
+      published: food.published !== false,
+      configuration: {
+        ...createBlankFoodForm().configuration,
+        ...(food.configuration || {}),
+      },
     });
     setIngredientInput("");
     setFormErrors({});
@@ -64,7 +72,8 @@ export default function AdminMenu({ navigate, onLogout }) {
   const validateForm = () => {
     const errors = {};
     if (!form.name.trim()) errors.name = "Name is required.";
-    if (!form.description.trim()) errors.description = "Description is required.";
+    if (!form.description.trim())
+      errors.description = "Description is required.";
     if (form.price <= 0) errors.price = "Price must be greater than 0.";
     return errors;
   };
@@ -75,6 +84,15 @@ export default function AdminMenu({ navigate, onLogout }) {
       setFormErrors(errors);
       return;
     }
+
+    const normalizedConfiguration = {
+      ...form.configuration,
+      allowMultipleMainBases: Boolean(
+        form.configuration?.allowMultipleMainBases,
+      ),
+      minMainBases: Number(form.configuration?.minMainBases || 1),
+      maxMainBases: Number(form.configuration?.maxMainBases || 1),
+    };
 
     setSaving(true);
     try {
@@ -87,15 +105,27 @@ export default function AdminMenu({ navigate, onLogout }) {
         fd.append("image", form.imageFile);
         fd.append("available", String(form.available));
         fd.append("popular", String(form.popular));
+        fd.append("published", String(form.published));
+        fd.append("foodType", form.foodType);
+        fd.append("role", form.role);
+        fd.append("allowStandalone", String(Boolean(form.allowStandalone)));
+        fd.append("configuration", JSON.stringify(normalizedConfiguration));
         fd.append("additionalInfo", form.ingredients.join(", "));
         fd.append("ingredients", form.ingredients.join(", "));
-        fd.append("preparationTime", form.category === "Fast Food" ? "30" : "0");
+        fd.append(
+          "preparationTime",
+          form.category === "Fast Food" ? "30" : "0",
+        );
 
         if (editing) {
-          await dispatch(updateFoodThunk({ id: getFoodId(editing), payload: fd })).unwrap();
+          await dispatch(
+            updateFoodThunk({ id: getFoodId(editing), payload: fd }),
+          ).unwrap();
+          await dispatch(fetchFoods());
           setSuccessMsg(`"${form.name}" updated successfully.`);
         } else {
           await dispatch(createFoodThunk(fd)).unwrap();
+          await dispatch(fetchFoods());
           setSuccessMsg(`"${form.name}" added to the menu.`);
         }
       } else {
@@ -107,16 +137,25 @@ export default function AdminMenu({ navigate, onLogout }) {
           image: form.imageUrl,
           available: form.available,
           popular: form.popular,
+          published: form.published,
+          foodType: form.foodType,
+          role: form.role,
+          allowStandalone: form.allowStandalone,
+          configuration: normalizedConfiguration,
           additionalInfo: form.ingredients.join(", "),
           ingredients: form.ingredients,
           preparationTime: form.category === "Fast Food" ? 30 : 0,
         };
 
         if (editing) {
-          await dispatch(updateFoodThunk({ id: getFoodId(editing), payload })).unwrap();
+          await dispatch(
+            updateFoodThunk({ id: getFoodId(editing), payload }),
+          ).unwrap();
+          await dispatch(fetchFoods());
           setSuccessMsg(`"${form.name}" updated successfully.`);
         } else {
           await dispatch(createFoodThunk(payload)).unwrap();
+          await dispatch(fetchFoods());
           setSuccessMsg(`"${form.name}" added to the menu.`);
         }
       }
@@ -132,15 +171,24 @@ export default function AdminMenu({ navigate, onLogout }) {
 
   const handleDelete = async (id) => {
     await dispatch(deleteFoodThunk(id)).unwrap();
+    await dispatch(fetchFoods());
     setDeleteId(null);
     setSuccessMsg("Item removed from menu.");
     setTimeout(() => setSuccessMsg(""), 3000);
   };
 
   return (
-    <AdminLayout activeNav="admin-menu" navigate={navigate} onLogout={onLogout} pageTitle="Menu Management">
+    <AdminLayout
+      activeNav="admin-menu"
+      navigate={navigate}
+      onLogout={onLogout}
+      pageTitle="Menu Management"
+    >
       {deleteId && (
-        <DeleteConfirmModal onCancel={() => setDeleteId(null)} onConfirm={() => handleDelete(deleteId)} />
+        <DeleteConfirmModal
+          onCancel={() => setDeleteId(null)}
+          onConfirm={() => handleDelete(deleteId)}
+        />
       )}
 
       {view === "list" ? (
@@ -152,14 +200,25 @@ export default function AdminMenu({ navigate, onLogout }) {
               onClick={openAdd}
               className="h-10 px-4 bg-orange-500 hover:bg-orange-600 text-white text-sm font-semibold rounded-xl transition-colors flex items-center gap-2"
             >
-              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
+              <svg
+                className="w-4 h-4"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+                strokeWidth="2.5"
+              >
                 <line x1="12" y1="5" x2="12" y2="19" strokeLinecap="round" />
                 <line x1="5" y1="12" x2="19" y2="12" strokeLinecap="round" />
               </svg>
               Add item
             </button>
           </div>
-          <MenuTable foods={foods} search={search} openEdit={openEdit} onDelete={setDeleteId} />
+          <MenuTable
+            foods={foods}
+            search={search}
+            openEdit={openEdit}
+            onDelete={setDeleteId}
+          />
         </div>
       ) : (
         <MenuForm

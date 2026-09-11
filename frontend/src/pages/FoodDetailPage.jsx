@@ -1,11 +1,18 @@
-import React, { useState, useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { useParams } from "react-router-dom";
 import { fetchFoods } from "../store/foodSlice";
 import { useApp } from "../context/AppContext";
 import Navbar from "../components/Navbar";
 import Footer from "../components/Footer";
+import FoodCard from "../components/FoodCard";
+import MealConfigurator from "../components/MealConfigurator";
 import { formatCurrency, getFoodId, getFoodImage } from "../lib/formatters";
+import {
+  canOrderStandalone,
+  getFoodRole,
+  isConfigurableFood,
+} from "../lib/mealConfig";
 
 export default function FoodDetailPage({ foodId, navigate }) {
   const { id } = useParams();
@@ -15,9 +22,10 @@ export default function FoodDetailPage({ foodId, navigate }) {
   const foods = useSelector((state) => state.food.items || []);
   const [qty, setQty] = useState(1);
   const [added, setAdded] = useState(false);
+  const [configuring, setConfiguring] = useState(false);
 
   useEffect(() => {
-    if (!foods || foods.length === 0) dispatch(fetchFoods());
+    dispatch(fetchFoods());
   }, [dispatch]);
 
   const food = foods.find((f) => getFoodId(f) === resolvedFoodId);
@@ -26,27 +34,19 @@ export default function FoodDetailPage({ foodId, navigate }) {
   const relatedFoods = foods.filter(
     (item) => getFoodId(item) !== itemId && item.category === food?.category,
   );
+  const role = getFoodRole(food);
+  const needsConfiguration =
+    isConfigurableFood(food) ||
+    (food?.foodType === "DRINK" && food.configuration?.variants?.length > 0);
+  const canStandaloneOrder = canOrderStandalone(food);
+  const isComplementOnly =
+    !canStandaloneOrder && !needsConfiguration && role !== "main";
 
   if (!food) {
     return (
       <div className="min-h-screen bg-stone-50 flex flex-col">
         <Navbar currentPage="menu" navigate={navigate} />
         <div className="flex-1 flex flex-col items-center justify-center gap-4 text-center px-6">
-          <div className="w-16 h-16 rounded-2xl bg-stone-100 flex items-center justify-center">
-            <svg
-              className="w-8 h-8 text-stone-400"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-              strokeWidth="1.5"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-              />
-            </svg>
-          </div>
           <p className="font-semibold text-stone-900">Meal not found</p>
           <button
             onClick={() => navigate("menu")}
@@ -69,55 +69,9 @@ export default function FoodDetailPage({ foodId, navigate }) {
     <div className="min-h-screen bg-stone-50 text-stone-900">
       <Navbar currentPage="menu" navigate={navigate} />
 
-      <div className="max-w-7xl mx-auto px-6 pt-5 pb-0 w-full">
-        <div className="flex items-center gap-1.5 text-xs text-stone-500">
-          <button
-            onClick={() => navigate("home")}
-            className="hover:text-orange-600 transition-colors"
-          >
-            Home
-          </button>
-          <svg
-            className="w-3 h-3"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-            strokeWidth="2"
-          >
-            <polyline
-              points="9 18 15 12 9 6"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
-          </svg>
-          <button
-            onClick={() => navigate("menu")}
-            className="hover:text-orange-600 transition-colors"
-          >
-            Menu
-          </button>
-          <svg
-            className="w-3 h-3"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-            strokeWidth="2"
-          >
-            <polyline
-              points="9 18 15 12 9 6"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
-          </svg>
-          <span className="text-stone-700 font-medium max-w-[180px] truncate">
-            {food.name}
-          </span>
-        </div>
-      </div>
-
       <div className="max-w-7xl mx-auto px-6 py-6 w-full flex-1">
         <div className="grid lg:grid-cols-[1.15fr_0.85fr] gap-10 items-start">
-          <div className="rounded-[26px] overflow-hidden bg-[#f5f3f0] border border-stone-200 shadow-sm">
+          <div className="rounded-3xl overflow-hidden bg-stone-100 border border-stone-200 shadow-sm">
             <img
               src={getFoodImage(food, "w=900&h=700")}
               alt={food.name}
@@ -156,6 +110,7 @@ export default function FoodDetailPage({ foodId, navigate }) {
             </div>
 
             <div className="mt-5 text-[2.2rem] font-bold text-stone-900">
+              {needsConfiguration ? "From " : ""}
               {formatCurrency(food.price)}
             </div>
 
@@ -181,42 +136,60 @@ export default function FoodDetailPage({ foodId, navigate }) {
               </div>
             )}
 
-            <div className="mt-10 flex items-center justify-between gap-4">
-              <div className="flex items-center rounded-xl border border-stone-200 bg-white shadow-sm overflow-hidden">
+            {needsConfiguration ? (
+              <div className="mt-10">
                 <button
                   type="button"
-                  onClick={() => setQty(Math.max(1, qty - 1))}
-                  className="h-14 w-14 text-2xl font-medium text-stone-700 hover:bg-stone-100 transition-colors"
+                  onClick={() => setConfiguring(true)}
+                  disabled={!food.available || food.published === false}
+                  className="w-full h-14 rounded-xl bg-orange-500 hover:bg-orange-600 text-white text-base font-semibold transition-colors disabled:opacity-50"
                 >
-                  −
-                </button>
-                <span className="w-12 text-center text-lg font-semibold text-stone-800">
-                  {qty}
-                </span>
-                <button
-                  type="button"
-                  onClick={() => setQty(qty + 1)}
-                  className="h-14 w-14 text-2xl font-medium text-stone-700 hover:bg-stone-100 transition-colors"
-                >
-                  +
+                  Customize Your Plate
                 </button>
               </div>
+            ) : isComplementOnly ? (
+              <div className="mt-10 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
+                This item is a side or protein option. Select a main meal to
+                build a plate.
+              </div>
+            ) : (
+              <div className="mt-10 flex items-center justify-between gap-4">
+                <div className="flex items-center rounded-xl border border-stone-200 bg-white shadow-sm overflow-hidden">
+                  <button
+                    type="button"
+                    onClick={() => setQty(Math.max(1, qty - 1))}
+                    className="h-14 w-14 text-2xl font-medium text-stone-700 hover:bg-stone-100 transition-colors"
+                  >
+                    -
+                  </button>
+                  <span className="w-12 text-center text-lg font-semibold text-stone-800">
+                    {qty}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setQty(qty + 1)}
+                    className="h-14 w-14 text-2xl font-medium text-stone-700 hover:bg-stone-100 transition-colors"
+                  >
+                    +
+                  </button>
+                </div>
 
-              <button
-                type="button"
-                onClick={handleAddToCart}
-                disabled={added}
-                className={`flex-1 h-14 rounded-xl text-base font-semibold transition-colors ${
-                  added
-                    ? "bg-green-500 text-white"
-                    : "bg-orange-500 hover:bg-orange-600 text-white"
-                }`}
-              >
-                {added
-                  ? "Added to cart"
-                  : `Add to Cart • ${formatCurrency(food.price * qty)}`}
-              </button>
-            </div>
+                <button
+                  type="button"
+                  onClick={handleAddToCart}
+                  disabled={added}
+                  className={`flex-1 h-14 rounded-xl text-base font-semibold transition-colors ${
+                    added
+                      ? "bg-green-500 text-white"
+                      : "bg-orange-500 hover:bg-orange-600 text-white"
+                  }`}
+                >
+                  {added
+                    ? "Added to order"
+                    : `Add to Order - ${formatCurrency(food.price * qty)}`}
+                </button>
+              </div>
+            )}
           </div>
         </div>
 
@@ -228,34 +201,31 @@ export default function FoodDetailPage({ foodId, navigate }) {
             >
               More from {food.category}
             </h2>
-            <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-5">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-5">
               {relatedFoods.slice(0, 4).map((item) => (
-                <div
+                <FoodCard
                   key={getFoodId(item)}
-                  className="group cursor-pointer rounded-2xl border border-stone-200 bg-white p-3 shadow-sm transition-transform hover:-translate-y-0.5 hover:shadow-md"
-                  onClick={() =>
-                    navigate("food-detail", { foodId: getFoodId(item) })
-                  }
-                >
-                  <img
-                    src={getFoodImage(item, "w=400&h=300")}
-                    alt={item.name}
-                    className="h-40 w-full rounded-xl object-cover bg-stone-100"
-                  />
-                  <div className="mt-3">
-                    <p className="text-sm font-semibold text-stone-900 truncate">
-                      {item.name}
-                    </p>
-                    <p className="mt-1 text-sm font-medium text-orange-600">
-                      {formatCurrency(item.price)}
-                    </p>
-                  </div>
-                </div>
+                  food={item}
+                  navigate={navigate}
+                />
               ))}
             </div>
           </div>
         )}
       </div>
+
+      {configuring && (
+        <MealConfigurator
+          food={food}
+          onCancel={() => setConfiguring(false)}
+          onAdd={(item) => {
+            addToCart(item);
+            setConfiguring(false);
+            setAdded(true);
+            setTimeout(() => setAdded(false), 2000);
+          }}
+        />
+      )}
 
       <Footer navigate={navigate} />
     </div>
