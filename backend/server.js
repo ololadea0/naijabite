@@ -76,9 +76,27 @@ if (process.env.NODE_ENV === "production")
 {
     const frontendDistPath = path.resolve(__dirname, "../frontend/dist");
 
-    app.use(express.static(frontendDistPath));
-    app.get(/.*/, (_req, res) => {
-        res.sendFile(path.join(frontendDistPath, "index.html"));
+    app.use(
+        express.static(frontendDistPath, {
+            maxAge: "1d",
+            fallthrough: true
+        })
+    );
+
+    app.get("/{*splat}", (req, res, next) => {
+        if (!req.accepts("html"))
+        {
+            return next();
+        }
+
+        const indexPath = path.join(frontendDistPath, "index.html");
+
+        res.sendFile(indexPath, (err) => {
+            if (err)
+            {
+                next(err);
+            }
+        });
     });
 }
 
