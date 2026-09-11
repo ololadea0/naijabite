@@ -33,21 +33,11 @@ const allowedOrigins = [
     "http://127.0.0.1:5174",
 ].filter(Boolean);
 
-// Apply CORS only to API routes so static asset requests are not rejected
-const apiCorsOptions = {
-    origin: (origin, callback) => {
-        if (!origin || allowedOrigins.includes(origin) || /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin))
-        {
-            callback(null, true);
-            return;
-        }
-
-        callback(new Error("Not allowed by CORS"));
-    },
-    credentials: true,
-};
-
-app.use('/api', cors(apiCorsOptions));
+// Apply CORS only to API routes. Allow the request origin and support
+// credentials so cookies work when frontend and backend are served from
+// the same host. If you want stricter checks, replace `origin: true`
+// with a validation function and set `process.env.CLIENT_URL`.
+app.use('/api', cors({ origin: true, credentials: true }));
 app.use(cookieParser());
 app.use(express.json({
     verify: (req, _res, buffer) => {
