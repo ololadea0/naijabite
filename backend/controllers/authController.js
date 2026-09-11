@@ -13,14 +13,19 @@ import {
 // @access  Public
 
 const registerUser = async (req, res, next) => {
-    const name = req.body.name?.trim();
+    const rawFirst = req.body.firstName?.trim();
+    const rawLast = req.body.lastName?.trim();
+    const nameFromBody = req.body.name?.trim();
     const email = req.body.email?.trim().toLowerCase();
     const password = req.body.password;
+
+    // prefer firstName + lastName, fall back to name
+    const name = (rawFirst || rawLast) ? `${rawFirst ?? ""} ${rawLast ?? ""}`.trim() : nameFromBody;
 
     if (!name || !email || !password)
     {
         res.status(400);
-        throw new Error("Name, email, and password are required");
+        throw new Error("First name, last name (or name), email, and password are required");
     }
 
     const userExists = await User.findOne({ email });

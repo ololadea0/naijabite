@@ -1,12 +1,10 @@
 {
-  "name": "naijabite-monorepo",
+  "name": "naijabite",
   "private": true,
-  "workspaces": ["frontend", "backend"],
   "scripts": {
-    "install": "npm install --workspaces",
-    "dev": "concurrently \"npm --prefix backend run dev\" \"npm --prefix frontend run dev\"",
-    "build": "npm --prefix frontend ci && npm --prefix frontend run build",
-    "start": "npm --prefix backend start"
+    "build": "npm run build --prefix frontend",
+    "start": "node backend/server.js",
+    "dev": "concurrently \"npm run dev --prefix frontend\" \"npm run dev --prefix backend\""
   },
   "devDependencies": {
     "concurrently": "^9.2.1"

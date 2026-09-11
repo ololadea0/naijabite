@@ -24,10 +24,11 @@ export const loginUser = createAsyncThunk(
 
 export const registerUser = createAsyncThunk(
     'auth/registerUser',
-    async ({ name, email, password }, { rejectWithValue }) => {
+    async ({ firstName, lastName, email, password }, { rejectWithValue }) => {
         try
         {
-            const response = await api.post('/users/register', { name, email, password });
+            // send both firstName and lastName so backend can compose a full name
+            const response = await api.post('/users/register', { firstName, lastName, email, password });
             return response.data;
         } catch (error)
         {

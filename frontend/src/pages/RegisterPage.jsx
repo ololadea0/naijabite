@@ -7,7 +7,8 @@ export default function RegisterPage({ onRegisterSuccess, onNavigateLogin }) {
   const dispatch = useDispatch();
   const navigate = useNavigate();
   const { status, error } = useSelector((state) => state.auth);
-  const [name, setName] = useState("");
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -17,12 +18,20 @@ export default function RegisterPage({ onRegisterSuccess, onNavigateLogin }) {
     e.preventDefault();
     dispatch(clearAuthError());
 
-    if (!name.trim() || !email.trim() || password.length < 6 || !agreed) {
+    if (
+      !firstName.trim() ||
+      !lastName.trim() ||
+      !email.trim() ||
+      password.length < 6 ||
+      !agreed
+    ) {
       return;
     }
 
     try {
-      await dispatch(registerUser({ name, email, password })).unwrap();
+      await dispatch(
+        registerUser({ firstName, lastName, email, password }),
+      ).unwrap();
       if (typeof onRegisterSuccess === "function") {
         onRegisterSuccess();
       } else {
@@ -145,16 +154,26 @@ export default function RegisterPage({ onRegisterSuccess, onNavigateLogin }) {
 
             <div>
               <label className="block text-xs font-semibold text-stone-700 mb-1.5 uppercase tracking-wide">
-                Full name
+                Name
               </label>
-              <input
-                type="text"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                autoComplete="name"
-                placeholder="Alex Johnson"
-                className="w-full h-11 px-4 rounded-xl border border-stone-200 bg-white text-sm text-stone-900 focus:outline-none focus:ring-2 focus:ring-orange-400/30 focus:border-orange-400 transition-colors"
-              />
+              <div className="flex gap-3">
+                <input
+                  type="text"
+                  value={firstName}
+                  onChange={(e) => setFirstName(e.target.value)}
+                  autoComplete="given-name"
+                  placeholder="First name"
+                  className="w-1/2 h-11 px-4 rounded-xl border border-stone-200 bg-white text-sm text-stone-900 focus:outline-none focus:ring-2 focus:ring-orange-400/30 focus:border-orange-400 transition-colors"
+                />
+                <input
+                  type="text"
+                  value={lastName}
+                  onChange={(e) => setLastName(e.target.value)}
+                  autoComplete="family-name"
+                  placeholder="Last name"
+                  className="w-1/2 h-11 px-4 rounded-xl border border-stone-200 bg-white text-sm text-stone-900 focus:outline-none focus:ring-2 focus:ring-orange-400/30 focus:border-orange-400 transition-colors"
+                />
+              </div>
             </div>
 
             <div>
